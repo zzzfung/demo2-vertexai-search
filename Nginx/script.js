@@ -1,149 +1,267 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 获取 DOM 元素
-    const searchForm = document.getElementById('search-form');
+    // --- DOM Elements ---
+    const textSearchForm = document.getElementById('text-search-form');
     const searchInput = document.getElementById('search-input');
     const resultsInfo = document.getElementById('results-info');
     const resultsGrid = document.getElementById('results-grid');
     const loadingIndicator = document.getElementById('loading-indicator');
     const errorMessage = document.getElementById('error-message');
 
-    // API 的 URL 地址
-    const API_URL = 'https://flask-image-to-text-app-746866758104.us-central1.run.app/search';
+    // Top image focus area elements
+    const imageFocusArea = document.getElementById('image-focus-area');
+    const sourceImagePreviewTag = document.getElementById('source-image-preview-tag');
+    const closeImageFocusBtn = document.getElementById('close-image-focus-btn');
 
-    // 函数：将 gs:// URL 转换为 https:// URL
+
+    // Modal elements
+    const openImageModalBtn = document.getElementById('open-image-modal-btn');
+    const imageUploadModal = document.getElementById('image-upload-modal');
+    const modalCloseBtn = imageUploadModal.querySelector('.modal-close-btn');
+    const imageDropArea = document.getElementById('image-drop-area');
+    const imageFileInput = document.getElementById('image-file-input'); // The actual file input
+    const uploadFileLink = document.getElementById('upload-file-link'); // The <a> tag
+    const imageUrlInput = document.getElementById('image-url-input');
+    const searchByUrlBtn = document.getElementById('search-by-url-btn');
+    const imagePreviewInModal = document.getElementById('image-preview'); // Preview inside modal
+    const modalErrorMessage = document.getElementById('modal-error-message');
+
+    // --- API URLs ---
+    const TEXT_API_URL = 'https://flask-image-to-text-app-746866758104.us-central1.run.app/search';
+    const IMAGE_API_URL = 'https://flask-image-to-text-app-746866758104.us-central1.run.app/imagesearch';
+
+    let lastSearchedImageFile = null;
+
     function convertGcsToHttps(gcsUrl) {
         if (gcsUrl && gcsUrl.startsWith('gs://')) {
-            // 基本转换，可能需要根据具体的存储桶/路径结构进行调整
-            // 将 'gs://' 替换为 Google Cloud Storage 的公共 HTTPS 前缀
             return gcsUrl.replace('gs://', 'https://storage.googleapis.com/');
         }
-        // 如果不是 gs:// URL，返回原始值或根据需要处理潜在错误
         return gcsUrl;
     }
 
-    // 函数：显示搜索结果
     function displayResults(results) {
-        // 清除之前的结果和错误信息
         resultsGrid.innerHTML = '';
-        errorMessage.textContent = '';
-
-        // 更新结果计数信息
-        // 注意: API 示例不提供 'total' 总项目数，只返回列表长度。
-        // 我们将模仿图片中显示的格式，但 'total' 不会准确。
-        resultsInfo.textContent = `检索到 ${results.length} 个结果。`;
-        // 如果知道总数： `检索到 ${results.length} 个结果，总计 X 个项目`;
-
+        resultsInfo.textContent = `检索到 ${results.length} 个结果.`;
         if (results.length === 0) {
-            resultsGrid.innerHTML = '<p>未找到结果。</p>';
+            resultsGrid.innerHTML = '<p style="text-align: center; color: #555;">未找到匹配的结果。</p>';
             return;
         }
-
-        // 遍历结果并创建 DOM 元素
         results.forEach((result, index) => {
             const imageUrl = convertGcsToHttps(result.gcs_url);
-
-            // 创建结果项的元素
             const itemDiv = document.createElement('div');
             itemDiv.classList.add('result-item');
-
             const img = document.createElement('img');
             img.src = imageUrl;
-            // 如果 API 提供描述性文本，可用作 alt 文本
-            img.alt = `搜索结果 ${index + 1} - ID: ${result.id}`;
-             // 基本的图片加载错误处理
+            img.alt = `搜索结果 ${index + 1}`;
+            img.loading = 'lazy'; // Lazy load images
             img.onerror = () => {
                img.alt = '图片加载失败';
-               img.src = 'placeholder_error.png'; // 可选：指向一个错误占位图片的路径
-               // 或者可以显示文本而不是破碎的图片图标
+               const errorText = document.createElement('p');
+               errorText.style.fontSize = '0.8em'; errorText.style.textAlign = 'center';
+               errorText.textContent = '图片加载失败';
+               if (img.parentNode) img.parentNode.replaceChild(errorText, img);
             };
-
-
             const indexSpan = document.createElement('span');
             indexSpan.classList.add('index');
             indexSpan.textContent = `#${index}`;
-
             const descriptionP = document.createElement('p');
             descriptionP.classList.add('description');
-            // 使用 ID 和 distance 作为占位描述，因为 API 没有提供像图片那样的文本
-            // 如果 API 响应中有更描述性的文本：
-            // descriptionP.textContent = result.description || `图片 ID: ${result.id}`;
-            // 这里我们暂时用 ID 和 distance 来填充
-            descriptionP.textContent = `ID: ${result.id}, 距离: ${result.distance.toFixed(4)}`;
-
-
-            // 将元素添加到结果项中
+            descriptionP.innerHTML = `ID: ${result.id}${result.distance !== undefined ? `, <br>距离: ${result.distance.toFixed(4)}` : ''}`;
             itemDiv.appendChild(img);
             itemDiv.appendChild(indexSpan);
             itemDiv.appendChild(descriptionP);
-
-            // 将结果项添加到网格中
             resultsGrid.appendChild(itemDiv);
         });
     }
 
-    // 处理表单提交事件 (用户按回车)
-    searchForm.addEventListener('submit', async (event) => {
-        event.preventDefault(); // 阻止页面默认的重新加载行为
-        const searchText = searchInput.value.trim(); // 获取并去除首尾空格
-
-        if (!searchText) {
-            errorMessage.textContent = '请输入要搜索的文本。';
-            resultsInfo.textContent = ''; // 清空信息区
-            resultsGrid.innerHTML = ''; // 清空结果区
-            return; // 终止执行
+    function displaySourceImageInFocusArea(imageFile) {
+        if (!imageFile) {
+            imageFocusArea.style.display = 'none';
+            return;
         }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            sourceImagePreviewTag.src = e.target.result;
+            imageFocusArea.style.display = 'block'; // Show the area
+        }
+        reader.readAsDataURL(imageFile);
+    }
 
-        // 显示加载指示器并清除之前的状态
-        loadingIndicator.style.display = 'block';
+    function showLoading(isLoading) {
+        loadingIndicator.style.display = isLoading ? 'block' : 'none';
+        if (isLoading) {
+            resultsInfo.textContent = '';
+            resultsGrid.innerHTML = '';
+            errorMessage.textContent = '';
+            modalErrorMessage.textContent = '';
+        }
+    }
+
+    function showError(message, isModalError = false) {
+        if (isModalError) {
+            modalErrorMessage.textContent = message;
+        } else {
+            errorMessage.textContent = message;
+        }
+    }
+
+    function clearSearchContext(isTextSearch = false) {
         errorMessage.textContent = '';
-        resultsInfo.textContent = '';
-        resultsGrid.innerHTML = ''; // 立即清空网格
+        if (isTextSearch || !lastSearchedImageFile) { 
+            imageFocusArea.style.display = 'none';
+            sourceImagePreviewTag.src = '#';
+            // lastSearchedImageFile = null; // Don't nullify here if we want close button to explicitly clear it
+        }
+    }
+    
+    if(closeImageFocusBtn) {
+        closeImageFocusBtn.addEventListener('click', () => {
+            imageFocusArea.style.display = 'none';
+            sourceImagePreviewTag.src = '#';
+            lastSearchedImageFile = null; 
+            // Optionally clear results:
+            // resultsInfo.textContent = '';
+            // resultsGrid.innerHTML = '';
+        });
+    }
 
+
+    // --- Modal Logic ---
+    function openModal() {
+        imageUploadModal.style.display = 'block';
+        modalErrorMessage.textContent = '';
+        imagePreviewInModal.style.display = 'none';
+        imagePreviewInModal.src = '#';
+        imageUrlInput.value = '';
+        imageFileInput.value = ''; // Clear file input to allow re-selection of the same file
+    }
+    function closeModal() { imageUploadModal.style.display = 'none'; }
+    openImageModalBtn.addEventListener('click', openModal);
+    modalCloseBtn.addEventListener('click', closeModal);
+    window.addEventListener('click', (event) => { if (event.target === imageUploadModal) closeModal(); });
+
+    // --- Text Search Logic ---
+    textSearchForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearSearchContext(true); 
+
+        const searchText = searchInput.value.trim();
+        if (!searchText) {
+            showError('请输入要搜索的文本。');
+            resultsInfo.textContent = ''; resultsGrid.innerHTML = '';
+            return;
+        }
+        showLoading(true);
         try {
-            // 发起 POST 请求到 API
-            const response = await fetch(API_URL, {
+            const response = await fetch(TEXT_API_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json', // 指定请求体是 JSON 格式
-                },
-                body: JSON.stringify({ text: searchText }), // 将搜索文本包装成 JSON
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: searchText }),
             });
-
-            // 检查响应状态是否成功 (HTTP 状态码 200-299)
             if (!response.ok) {
-                 // 尝试从响应体中获取错误详情
-                let errorDetails = `HTTP 错误! 状态码: ${response.status}`;
-                try {
-                    const errorData = await response.json(); // 尝试解析错误响应体
-                    errorDetails += ` - ${errorData.message || JSON.stringify(errorData)}`;
-                } catch (e) {
-                    // 如果响应体不是 JSON 或为空，则忽略
-                }
-                throw new Error(errorDetails); // 抛出包含状态码和详情的错误
+                const errorData = await response.json().catch(() => ({message: "无法解析错误"}));
+                throw new Error(`HTTP ${response.status}: ${errorData.message || response.statusText}`);
             }
-
-            // 解析 JSON 响应体
             const results = await response.json();
-            // 显示结果
             displayResults(results);
-
         } catch (error) {
-            // 捕获 fetch 或 JSON 解析过程中的错误
-            console.error('搜索失败:', error);
-            resultsInfo.textContent = ''; // 出错时清空信息区
-            errorMessage.textContent = `获取结果时出错: ${error.message}`;
-            resultsGrid.innerHTML = ''; // 确保出错时网格是空的
-        } finally {
-            // 无论成功还是失败，最终都隐藏加载指示器
-            loadingIndicator.style.display = 'none';
+            console.error('Text search failed:', error);
+            showError(`文本搜索失败: ${error.message}`);
+            resultsInfo.textContent = ''; resultsGrid.innerHTML = '';
+        } finally { showLoading(false); }
+    });
+
+    // --- Image Search Logic ---
+    async function performImageSearch(imageFile) {
+        if (!imageFile) {
+            showError('没有提供图片文件用于搜索。', true);
+            return;
+        }
+        lastSearchedImageFile = imageFile; 
+        clearSearchContext(false); 
+        showLoading(true);
+        closeModal(); 
+
+        const formData = new FormData();
+        formData.append('image', imageFile, imageFile.name || 'uploaded_image.jpg');
+        try {
+            const response = await fetch(IMAGE_API_URL, { method: 'POST', body: formData });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({message: "无法解析错误响应"}));
+                throw new Error(`HTTP ${response.status}: ${errorData.message || response.statusText}`);
+            }
+            const results = await response.json();
+            displaySourceImageInFocusArea(lastSearchedImageFile); 
+            displayResults(results);
+        } catch (error) {
+            console.error('Image search failed:', error);
+            showError(`图片搜索失败: ${error.message}`);
+            resultsInfo.textContent = ''; resultsGrid.innerHTML = '';
+            // Only hide focus area if the error is critical for display, 
+            // otherwise user might want to see what they tried to search with.
+            // imageFocusArea.style.display = 'none'; 
+        } finally { showLoading(false); }
+    }
+    
+    // *** 问题1修正处 START ***
+    // Handle click on "上传文件" link to trigger file input
+    if (uploadFileLink) {
+        uploadFileLink.addEventListener('click', (e) => {
+            e.preventDefault(); // Prevent default anchor behavior
+            imageFileInput.click(); // Programmatically click the hidden file input
+        });
+    }
+    // *** 问题1修正处 END ***
+
+    // Handle file selection from <input type="file">
+    imageFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            if (file.type.startsWith('image/')) {
+                performImageSearch(file); 
+            } else {
+                showError('请选择一个图片文件。', true);
+                imageFileInput.value = ''; // Reset file input if invalid file
+            }
         }
     });
 
-    // 可选: 页面加载时为输入框中的初始值自动触发一次搜索
-    // 如果需要此行为，取消下面这行的注释
-    // searchForm.dispatchEvent(new Event('submit'));
+    // Handle file drop
+    imageDropArea.addEventListener('drop', (event) => {
+        event.preventDefault(); event.stopPropagation();
+        imageDropArea.style.borderColor = '#d0d0d0';
+        const file = event.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            performImageSearch(file); 
+        } else if (file) {
+            showError('请拖放一个图片文件。', true);
+        }
+    });
+    // Drag listeners for styling
+    imageDropArea.addEventListener('dragover', (event) => { event.preventDefault(); event.stopPropagation(); imageDropArea.style.borderColor = '#4285f4'; });
+    imageDropArea.addEventListener('dragleave', (event) => { event.preventDefault(); event.stopPropagation(); imageDropArea.style.borderColor = '#d0d0d0'; });
 
-    // 如果不自动触发，可以清除占位符信息文本
-    // resultsInfo.textContent = '输入文本后按回车键进行搜索。';
-    // 或者让初始的静态 HTML 内容保持可见，直到第一次搜索发生
+
+    // Image URL Upload
+    searchByUrlBtn.addEventListener('click', async () => {
+        const url = imageUrlInput.value.trim();
+        if (!url) { showError('请输入图片链接。', true); return; }
+        modalErrorMessage.textContent = '正在从链接加载图片...';
+        imagePreviewInModal.style.display = 'none'; imagePreviewInModal.src = '#';
+        try {
+            const response = await fetch(url); // Consider adding a timeout or using AbortController
+            if (!response.ok) throw new Error(`无法加载图片 (HTTP ${response.status})`);
+            const blob = await response.blob();
+            if (!blob.type.startsWith('image/')) throw new Error('链接指向的不是有效的图片类型。');
+            const fileName = url.substring(url.lastIndexOf('/') + 1).split(/[?#]/)[0] || 'imageFromUrl.jpg';
+            const imageFile = new File([blob], fileName, { type: blob.type });
+            performImageSearch(imageFile); 
+        } catch (error) {
+            console.error('Error fetching image from URL:', error);
+            showError(`无法从链接加载图片: ${error.message}`, true);
+            imagePreviewInModal.style.display = 'none'; // Hide preview on error too
+            modalErrorMessage.textContent = `无法从链接加载图片: ${error.message.substring(0, 100)}`; // Clear loading, show error
+        }
+    });
+
+    clearSearchContext(true); // Initial page state
 });

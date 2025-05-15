@@ -3,68 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文本图像搜索</title>
+    <title>多模态语义检索</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Search by text (按文本搜索)</h1>
-
-        <form id="search-form">
-            <!-- 初始值与图片匹配 -->
-            <input type="text" id="search-input" value="cups in the google logo colors" placeholder="输入搜索文本...">
-            <!-- 图片中没有明确的按钮，通过回车触发搜索 -->
-        </form>
-
-        <div id="results-info">
-            <!-- 结果计数将在这里填充 -->
-            <!-- 示例: 60 results retrieved from a total of 5,748,850 items -->
-            <!-- 注意: 提供的 API 示例不返回 'total items' 计数 -->
-            60 results retrieved from a total of 5,748,850 items <!-- 初始静态文本 -->
+    <div class="app-wrapper">
+        <!-- 顶部图片聚焦展示区 -->
+        <div id="image-focus-area" style="display: none;">
+            <div class="image-focus-controls">
+                <i class="fas fa-search control-icon"></i> <!-- 模拟放大镜图标 -->
+                <i class="fas fa-times control-icon" id="close-image-focus-btn"></i> <!-- 模拟关闭/收起图标 -->
+            </div>
+            <div class="source-image-display-wrapper">
+                <div class="source-image-frame">
+                    <img id="source-image-preview-tag" src="#" alt="搜索源图片">
+                </div>
+            </div>
         </div>
 
-        <div id="results-grid" class="results-grid">
-            <!-- 搜索结果将在这里填充 -->
-            <!-- 初始显示的占位符内容，与图片匹配 -->
-            <div class="result-item">
-                <img src="placeholder_0.png" alt="复古特百惠儿童杯 红、绿、蓝">
-                <span class="index">#0</span>
-                <p class="description">Vintage Tupperware Kids Cup Tumblers Red, Green, Blue</p>
-            </div>
-            <div class="result-item">
-                <img src="placeholder_1.png" alt="Harkins 影院电影收藏杯">
-                <span class="index">#1</span>
-                <p class="description">Harkins Theater Movie Collector Cups 6pc 2023 2019 Sold out plastic</p>
-            </div>
-            <div class="result-item">
-                <img src="placeholder_2.png" alt="星巴克 Tazo 不对称马克杯">
-                <span class="index">#2</span>
-                <p class="description">4 STARBUCKS Tazo Mugs Asymmetrical Tea Cup Bone China Tumbler. Maroon and blue</p>
-            </div>
-             <div class="result-item">
-                <img src="placeholder_3.png" alt="复古特百惠4个小号儿童杯">
-                <span class="index">#3</span>
-                <p class="description">Vintage Tupperware 4 Small Tumbler Kids Cups Stackable 3.75" Tall</p>
-            </div>
-             <div class="result-item">
-                <img src="placeholder_4.png" alt="6个特百惠吸管杯">
-                <span class="index">#4</span>
-                <p class="description">Lot of 6 Tupperware Sippy Bell Tumblers YELLOW BLUE GREEN RED NO LIDS.</p>
-            </div>
-             <div class="result-item">
-                <img src="placeholder_5.png" alt="复古4个特百惠Jazzy庆祝系列杯">
-                <span class="index">#5</span>
-                <p class="description">Vintage lot of 4 Tupperware Jazzy Celebrations Tumblers jewel tones</p>
-            </div>
-            <!-- 如果你有占位图片 1-5，请添加 -->
-            <!-- 实际结果将通过 JavaScript 替换这些内容 -->
-        </div>
+        <!-- 主要内容和搜索结果区 -->
+        <div class="main-content-area">
+            <div class="container"> <!-- 保留 container 用于内容居中和基本样式 -->
+                <h1>多模态语义检索</h1>
 
-        <div id="loading-indicator" style="display: none; text-align: center; margin-top: 20px;">
-            正在加载结果...
-        </div>
-        <div id="error-message" style="color: red; text-align: center; margin-top: 20px;"></div>
+                <div class="search-bar-wrapper">
+                    <form id="text-search-form" class="search-form-main">
+                        <i class="fas fa-search search-icon-magnify"></i>
+                        <input type="text" id="search-input" placeholder="输入文本进行搜索...">
+                    </form>
+                    <button id="open-image-modal-btn" class="image-search-trigger-btn" aria-label="Search by image">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                            <path d="M4 4h3l2-2h6l2 2h3v2H4V4zm0 4h16v12H4V8zm4 2c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm8-5h-3v2h3v3h2v-3h3v-2h-3V7h-2v3z"/>
+                        </svg>
+                    </button>
+                </div>
 
+                <div id="results-info"></div>
+                <div id="results-grid" class="results-grid"></div>
+
+                <div id="loading-indicator" style="display: none; text-align: center; margin-top: 20px;">
+                    正在加载结果...
+                </div>
+                <div id="error-message" style="color: red; text-align: center; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 图片上传 Modal (保持不变) -->
+    <div id="image-upload-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close-btn">×</span>
+            <h2>通过图片搜索</h2>
+            <div id="image-drop-area" class="drop-area">
+                <div class="drop-area-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#cccccc" width="60" height="60">
+                        <path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h10l4 4V18h2c1.1 0 2-.9 2-2V4zm-2 12H6V6h14v10zm-6-7c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/><path d="M0 0h24v24H0z" fill="none"/>
+                    </svg>
+                </div>
+                <p>将图片拖到此处，或者 <a href="#" id="upload-file-link">上传文件</a></p>
+                <input type="file" id="image-file-input" accept="image/*" style="display: none;">
+                <img id="image-preview" src="#" alt="Image Preview" style="display: none;"/>
+            </div>
+            <div class="separator-or">或</div>
+            <div class="url-upload-area">
+                <input type="url" id="image-url-input" placeholder="粘贴图片链接">
+                <button id="search-by-url-btn">搜索</button>
+            </div>
+             <div id="modal-error-message" style="color: red; text-align: center; margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
     </div>
 
     <script src="script.js"></script>

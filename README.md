@@ -105,5 +105,5 @@ python manage.py runserver
 
 ## License
 
-基于Apache 2.0协议， 详细请参考[LICENSE](https://github.com/zzzfung/demo2_blackfriday/blob/main/LICENSE)
+基于Apache 2.0协议， 详细请参考[LICENSE](https://github.com/zzzfung/demo2-vertexai-search/blob/main/LICENSE)
 
